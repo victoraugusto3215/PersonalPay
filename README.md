@@ -2,7 +2,7 @@
 
 Mini sistema de cobrança para personal trainers autônomos: cadastra aluno, gera cobrança de mensalidade via **Pix** (Mercado Pago), acompanha o pagamento em tempo real e manda lembrete automático por **WhatsApp** quando a cobrança vence sem pagamento.
 
-Projeto de portfólio — o cenário (personal trainer) é fictício e deliberadamente alheio a qualquer contexto profissional do autor. O objetivo é demonstrar, em escopo pequeno e completo, um fluxo real de: integração com gateway de pagamento, processamento assíncrono de webhook via fila, e integração com WhatsApp Business API.
+O objetivo é demonstrar, em escopo pequeno e completo, um fluxo real de: integração com gateway de pagamento, processamento assíncrono de webhook via fila, e integração com WhatsApp Business API.
 
 ## Stack
 
