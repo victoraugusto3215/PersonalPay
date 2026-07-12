@@ -1,0 +1,134 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject PaymentUpdateNotifier Notifier
+@using Microsoft.EntityFrameworkCore
+@using PersonalPay.Web.Data
+@using PersonalPay.Web.Models
+@using PersonalPay.Web.Services
+@implements IDisposable
+
+<PageTitle>Cobranças</PageTitle>
+
+<h1>
+    Cobranças
+    @if (atualizadoAgora)
+    {
+        <span class="badge text-bg-success align-middle fs-6">atualizado agora</span>
+    }
+</h1>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-4">
+        <div class="card text-bg-light">
+            <div class="card-body">
+                <div class="text-muted small">A receber (pendente)</div>
+                <div class="fs-4">@TotalPendente.ToString("C")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="card text-bg-light">
+            <div class="card-body">
+                <div class="text-muted small">Vencido</div>
+                <div class="fs-4 text-danger">@TotalVencido.ToString("C")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-4">
+        <div class="card text-bg-light">
+            <div class="card-body">
+                <div class="text-muted small">Recebido</div>
+                <div class="fs-4 text-success">@TotalPago.ToString("C")</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (cobrancas is null)
+{
+    <p><em>Carregando...</em></p>
+}
+else if (cobrancas.Count == 0)
+{
+    <p>Nenhuma cobrança cadastrada ainda. <a href="/nova-cobranca">Criar a primeira</a>.</p>
+}
+else
+{
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>Aluno</th>
+                <th>Descrição</th>
+                <th>Valor</th>
+                <th>Vencimento</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var c in cobrancas)
+            {
+                <tr>
+                    <td>@c.Cliente?.Nome</td>
+                    <td>@c.Descricao</td>
+                    <td>@c.Valor.ToString("C")</td>
+                    <td>@c.Vencimento.ToString("dd/MM/yyyy")</td>
+                    <td><span class="badge @StatusBadgeClass(c.Status)">@c.Status</span></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Cobranca>? cobrancas;
+    private bool atualizadoAgora;
+
+    private decimal TotalPendente => cobrancas?.Where(c => c.Status == StatusCobranca.Pendente).Sum(c => c.Valor) ?? 0;
+    private decimal TotalVencido => cobrancas?.Where(c => c.Status == StatusCobranca.Vencida).Sum(c => c.Valor) ?? 0;
+    private decimal TotalPago => cobrancas?.Where(c => c.Status == StatusCobranca.Paga).Sum(c => c.Valor) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarAsync();
+        Notifier.Alterado += OnAlterado;
+    }
+
+    // O worker roda numa thread própria (BackgroundService) — nunca mexe direto
+    // no estado do componente a partir dali; InvokeAsync agenda de volta na
+    // thread de renderização do circuito do Blazor Server.
+    private void OnAlterado()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await CarregarAsync();
+            atualizadoAgora = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            atualizadoAgora = false;
+            StateHasChanged();
+        });
+    }
+
+    private async Task CarregarAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        cobrancas = await db.Cobrancas
+            .Include(c => c.Cliente)
+            .OrderByDescending(c => c.CriadoEm)
+            .ToListAsync();
+    }
+
+    private static string StatusBadgeClass(StatusCobranca status) => status switch
+    {
+        StatusCobranca.Paga => "text-bg-success",
+        StatusCobranca.Vencida => "text-bg-danger",
+        StatusCobranca.Cancelada => "text-bg-secondary",
+        _ => "text-bg-warning",
+    };
+
+    public void Dispose()
+    {
+        Notifier.Alterado -= OnAlterado;
+    }
+}

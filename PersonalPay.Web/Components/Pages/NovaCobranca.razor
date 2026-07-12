@@ -1,0 +1,186 @@
+@page "/nova-cobranca"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject MercadoPagoService MercadoPago
+@using Microsoft.EntityFrameworkCore
+@using PersonalPay.Web.Data
+@using PersonalPay.Web.Models
+@using PersonalPay.Web.Services
+
+<PageTitle>Nova cobrança</PageTitle>
+
+<h1>Nova cobrança</h1>
+
+@if (pixGerado is null)
+{
+    <EditForm Model="modelo" OnValidSubmit="SalvarAsync" class="col-lg-6">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+
+        <div class="mb-3">
+            <label class="form-label">Aluno</label>
+            <InputSelect @bind-Value="clienteSelecionadoId" class="form-select">
+                <option value="0">+ Novo aluno</option>
+                @if (clientes is not null)
+                {
+                    @foreach (var cl in clientes)
+                    {
+                        <option value="@cl.Id">@cl.Nome</option>
+                    }
+                }
+            </InputSelect>
+        </div>
+
+        @if (clienteSelecionadoId == 0)
+        {
+            <div class="mb-3">
+                <label class="form-label">Nome do aluno</label>
+                <InputText @bind-Value="modelo.NovoClienteNome" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">E-mail do aluno</label>
+                <InputText @bind-Value="modelo.NovoClienteEmail" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">WhatsApp (com DDI, ex.: 5531999999999)</label>
+                <InputText @bind-Value="modelo.NovoClienteWhatsApp" class="form-control" />
+            </div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">Descrição</label>
+            <InputText @bind-Value="modelo.Descricao" class="form-control" placeholder="Ex.: Mensalidade — julho" />
+        </div>
+
+        <div class="row">
+            <div class="col-sm-6 mb-3">
+                <label class="form-label">Valor (R$)</label>
+                <InputNumber @bind-Value="modelo.Valor" class="form-control" />
+            </div>
+            <div class="col-sm-6 mb-3">
+                <label class="form-label">Vencimento</label>
+                <InputDate @bind-Value="modelo.Vencimento" class="form-control" />
+            </div>
+        </div>
+
+        @if (erro is not null)
+        {
+            <div class="alert alert-danger">@erro</div>
+        }
+
+        <button type="submit" class="btn btn-primary" disabled="@salvando">
+            @(salvando ? "Gerando Pix..." : "Gerar cobrança")
+        </button>
+    </EditForm>
+}
+else
+{
+    <div class="col-lg-6">
+        <div class="alert alert-success">Cobrança criada. Peça pro aluno pagar o Pix abaixo.</div>
+
+        @if (pixGerado.QrCodeBase64 is not null)
+        {
+            <img src="data:image/png;base64,@pixGerado.QrCodeBase64" alt="QR Code Pix" class="img-fluid mb-3" style="max-width: 260px;" />
+        }
+
+        @if (pixGerado.QrCodeCopiaECola is not null)
+        {
+            <label class="form-label">Pix copia e cola</label>
+            <textarea class="form-control mb-3" rows="3" readonly>@pixGerado.QrCodeCopiaECola</textarea>
+        }
+
+        <div class="d-flex gap-2">
+            <a href="/" class="btn btn-primary">Ver no dashboard</a>
+            <a href="/nova-cobranca" class="btn btn-outline-secondary">Criar outra cobrança</a>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Cliente>? clientes;
+    private int clienteSelecionadoId;
+    private readonly NovaCobrancaModelo modelo = new();
+    private string? erro;
+    private bool salvando;
+    private PixGerado? pixGerado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        clientes = await db.Clientes.OrderBy(c => c.Nome).ToListAsync();
+        modelo.Vencimento = DateTime.Today.AddDays(7);
+    }
+
+    private async Task SalvarAsync()
+    {
+        erro = null;
+        salvando = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            Cliente cliente;
+            if (clienteSelecionadoId == 0)
+            {
+                if (string.IsNullOrWhiteSpace(modelo.NovoClienteNome)
+                    || string.IsNullOrWhiteSpace(modelo.NovoClienteEmail)
+                    || string.IsNullOrWhiteSpace(modelo.NovoClienteWhatsApp))
+                {
+                    erro = "Informe nome, e-mail e WhatsApp do novo aluno.";
+                    return;
+                }
+
+                cliente = new Cliente
+                {
+                    Nome = modelo.NovoClienteNome.Trim(),
+                    Email = modelo.NovoClienteEmail.Trim(),
+                    WhatsApp = modelo.NovoClienteWhatsApp.Trim(),
+                };
+                db.Clientes.Add(cliente);
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                cliente = await db.Clientes.FirstAsync(c => c.Id == clienteSelecionadoId);
+            }
+
+            var cobranca = new Cobranca
+            {
+                ClienteId = cliente.Id,
+                Descricao = modelo.Descricao,
+                Valor = modelo.Valor,
+                Vencimento = DateOnly.FromDateTime(modelo.Vencimento),
+                Status = StatusCobranca.Pendente,
+            };
+            db.Cobrancas.Add(cobranca);
+            await db.SaveChangesAsync();
+
+            var pix = await MercadoPago.CriarCobrancaPixAsync(cobranca, cliente);
+
+            cobranca.MercadoPagoPaymentId = pix.PaymentId;
+            cobranca.PixCopiaECola = pix.QrCodeCopiaECola;
+            cobranca.PixQrCodeBase64 = pix.QrCodeBase64;
+            await db.SaveChangesAsync();
+
+            pixGerado = pix;
+        }
+        catch (Exception ex)
+        {
+            erro = $"Não deu pra gerar o Pix: {ex.Message}";
+        }
+        finally
+        {
+            salvando = false;
+        }
+    }
+
+    private class NovaCobrancaModelo
+    {
+        public string? NovoClienteNome { get; set; }
+        public string? NovoClienteEmail { get; set; }
+        public string? NovoClienteWhatsApp { get; set; }
+        public string Descricao { get; set; } = string.Empty;
+        public decimal Valor { get; set; }
+        public DateTime Vencimento { get; set; }
+    }
+}
