@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,3 +18,5 @@ jobs:
         run: dotnet restore PersonalPay.slnx
       - name: Build
         run: dotnet build PersonalPay.slnx --no-restore --configuration Release
+      - name: Test
+        run: dotnet test PersonalPay.slnx --no-build --configuration Release
