@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/victoraugustovalle/PersonalPay/actions/workflows/ci.yml/badge.svg)](https://github.com/victoraugustovalle/PersonalPay/actions/workflows/ci.yml)
 
+![Dashboard de cobranças do PersonalPay](docs/screenshot-cobrancas.png)
+
+![Nova cobrança com QR Code Pix](docs/screenshot-nova-cobranca.png)
+
 Mini sistema de cobrança para personal trainers autônomos: cadastra aluno, gera cobrança de mensalidade via **Pix** (Mercado Pago), acompanha o pagamento em tempo real e manda lembrete automático por **WhatsApp** quando a cobrança vence sem pagamento.
 
 O objetivo é demonstrar, em escopo pequeno e completo, um fluxo real de: integração com gateway de pagamento, processamento assíncrono de webhook via fila, e integração com WhatsApp Business API.
