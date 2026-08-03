@@ -1,6 +1,6 @@
 # PersonalPay
 
-[![CI](https://github.com/victoraugusto3215/PersonalPay/actions/workflows/ci.yml/badge.svg)](https://github.com/victoraugusto3215/PersonalPay/actions/workflows/ci.yml)
+[![CI](https://github.com/victoraugustovalle/PersonalPay/actions/workflows/ci.yml/badge.svg)](https://github.com/victoraugustovalle/PersonalPay/actions/workflows/ci.yml)
 
 Mini sistema de cobrança para personal trainers autônomos: cadastra aluno, gera cobrança de mensalidade via **Pix** (Mercado Pago), acompanha o pagamento em tempo real e manda lembrete automático por **WhatsApp** quando a cobrança vence sem pagamento.
 
